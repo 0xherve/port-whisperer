@@ -2,19 +2,33 @@
 
 **A beautiful CLI tool to see what's running on your ports.**
 
-Stop guessing which process is hogging port 3000. `port-whisperer` gives you a color-coded table of every dev server, database, and background process listening on your machine -- with framework detection, git info, and interactive process management.
+Stop guessing which process is hogging port 3000. `port-whisperer` gives you a color-coded table of every dev server, database, and background process listening on your machine -- with framework detection, Docker container identification, and interactive process management.
 
 ## What it looks like
 
 ```
 $ ports
 
-  Port   Process        PID     Project            Framework   Uptime    Status
-  -----  -------------  ------  -----------------  ----------  --------  --------
-  3000   node           41234   ~/dev/my-app       Next.js     2h 14m   healthy
-  5173   node           41300   ~/dev/dashboard    Vite        45m      healthy
-  5432   postgres       1028    -                  PostgreSQL  3d 7h    healthy
-  8080   node           52887   ~/dev/old-api      Express     6d 2h    orphaned
+ ┌─────────────────────────────────────┐
+ │  Port Whisperer                     │
+ │  listening to your ports...         │
+ └─────────────────────────────────────┘
+
+┌───────┬─────────┬───────┬──────────────────────┬────────────┬────────┬───────────┐
+│ PORT  │ PROCESS │ PID   │ PROJECT              │ FRAMEWORK  │ UPTIME │ STATUS    │
+├───────┼─────────┼───────┼──────────────────────┼────────────┼────────┼───────────┤
+│ :3000 │ node    │ 42872 │ frontend             │ Next.js    │ 1d 9h  │ ● healthy │
+├───────┼─────────┼───────┼──────────────────────┼────────────┼────────┼───────────┤
+│ :3001 │ node    │ 95380 │ preview-app          │ Next.js    │ 2h 40m │ ● healthy │
+├───────┼─────────┼───────┼──────────────────────┼────────────┼────────┼───────────┤
+│ :4566 │ docker  │ 58351 │ backend-localstack-1 │ LocalStack │ 10d 3h │ ● healthy │
+├───────┼─────────┼───────┼──────────────────────┼────────────┼────────┼───────────┤
+│ :5432 │ docker  │ 58351 │ backend-postgres-1   │ PostgreSQL │ 10d 3h │ ● healthy │
+├───────┼─────────┼───────┼──────────────────────┼────────────┼────────┼───────────┤
+│ :6379 │ docker  │ 58351 │ backend-redis-1      │ Redis      │ 10d 3h │ ● healthy │
+└───────┴─────────┴───────┴──────────────────────┴────────────┴────────┴───────────┘
+
+  5 ports active  ·  Run ports <number> for details  ·  --all to show everything
 ```
 
 Colors: green = healthy, yellow = orphaned, red = zombie.
@@ -43,7 +57,7 @@ If you use [Claude Code](https://claude.ai/code), you can ask it to `npm install
 ports
 ```
 
-Displays a table of common dev server ports with process name, PID, project directory, detected framework, uptime, and health status.
+Shows dev servers, Docker containers, and databases. System apps (Spotify, Raycast, etc.) are filtered out by default.
 
 ### Show all listening ports
 
@@ -51,7 +65,7 @@ Displays a table of common dev server ports with process name, PID, project dire
 ports --all
 ```
 
-Includes system services, databases, and everything else listening on your machine.
+Includes system services, desktop apps, and everything else listening on your machine.
 
 ### Inspect a specific port
 
@@ -61,7 +75,19 @@ ports 3000
 whoisonport 3000
 ```
 
-Detailed view of a single port: full process tree, repository path, current git branch, memory usage, and an interactive prompt to kill the process if needed.
+Detailed view: full process tree, repository path, current git branch, memory usage, and an interactive prompt to kill the process.
+
+### Show all dev processes
+
+```bash
+ports ps
+```
+
+A beautiful `ps aux` for developers. Shows all running dev processes (not just port-bound ones) with CPU%, memory, framework detection, and a smart description column. Docker processes are collapsed into a single summary row.
+
+```bash
+ports ps --all    # show all processes, not just dev
+```
 
 ### Clean up orphaned processes
 
@@ -69,7 +95,7 @@ Detailed view of a single port: full process tree, repository path, current git 
 ports clean
 ```
 
-Finds and kills orphaned or zombie dev server processes that are still holding onto ports after you've stopped working on a project.
+Finds and kills orphaned or zombie dev server processes. Only targets dev runtimes (node, python, etc.) -- won't touch your desktop apps.
 
 ### Watch for port changes
 
@@ -77,23 +103,25 @@ Finds and kills orphaned or zombie dev server processes that are still holding o
 ports watch
 ```
 
-Real-time monitoring that updates whenever a port starts or stops listening.
+Real-time monitoring that notifies you whenever a port starts or stops listening.
 
 ## How it works
 
-`port-whisperer` combines three shell calls to build a complete picture of each port:
+Three shell calls, runs in ~0.2s:
 
 1. **`lsof -iTCP -sTCP:LISTEN`** -- finds all processes listening on TCP ports
-2. **`ps`** -- retrieves process details (command line, uptime, memory)
-3. **`lsof -p <pid>`** -- resolves the working directory of each process to detect the project and framework
+2. **`ps`** (single batched call) -- retrieves process details for all PIDs at once: command line, uptime, memory, parent PID, status
+3. **`lsof -d cwd`** (single batched call) -- resolves the working directory of each process to detect the project and framework
 
-Framework detection works by reading `package.json` dependencies and inspecting process command lines. It recognizes Next.js, Vite, Express, Angular, Django, Rails, and many others.
+For Docker ports, a single `docker ps` call maps host ports to container names and images.
+
+Framework detection reads `package.json` dependencies and inspects process command lines. Recognizes Next.js, Vite, Express, Angular, Remix, Astro, Django, Rails, FastAPI, and many others. Docker images are identified as PostgreSQL, Redis, MongoDB, LocalStack, nginx, etc.
 
 ## Platform support
 
 | Platform | Status |
 |----------|--------|
-| macOS    | Supported (uses `lsof`) |
+| macOS    | Supported |
 | Linux    | Planned |
 | Windows  | Not planned |
 
